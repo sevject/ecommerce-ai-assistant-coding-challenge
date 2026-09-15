@@ -127,6 +127,9 @@ src/
 modified apart from adding `strict: true` to `tsconfig.json` and three scripts
 (`ask`, `test`, `typecheck`) to `package.json`.
 
+[`src/assistant/README.md`](./src/assistant/README.md) walks through each file and
+why it is shaped the way it is.
+
 ## Assumptions
 
 - **"Order value" means the sum of its line items** at the price charged at the
@@ -141,6 +144,13 @@ modified apart from adding `strict: true` to `tsconfig.json` and three scripts
   and the question examples in the brief use five.
 - **The reference date defaults to the last order in the data**, as described
   above.
+- **Amounts are shown in dollars.** Nothing in the schema or the seed files
+  records a currency — the `_cents` columns are bare integers with no unit
+  attached — so the symbol is a labelling decision, not something read from the
+  data. It follows the one example in the brief (`$45.99` is `4599`).
+  `CURRENCY_SYMBOL` in `format.ts` is the single place it is set. A genuinely
+  multi-currency dataset would need the currency to travel with each amount, which
+  is a schema change, not a formatting one.
 - **200 rows is enough for an analytical answer.** Anything larger is a report,
   not an answer to a question, and the result is flagged as truncated.
 - **One question per invocation.** No conversation, no follow-ups, no memory of
@@ -150,21 +160,30 @@ modified apart from adding `strict: true` to `tsconfig.json` and three scripts
 
 ## What is rough or missing
 
-- **The live model path is untested.** There was no `ANTHROPIC_API_KEY` available
-  in the environment where this was built, so the two Claude calls have never run
-  against the real API. The pipeline around them was verified end-to-end with a
-  stubbed client, covering the happy path, the repair loop, refusal, an unsafe
-  query, and an empty result — but the prompts themselves are unproven, and prompt
-  quality is exactly the part that needs real runs to judge. This is the biggest
-  gap in the submission and the first thing to fix.
+- **The live model path is barely tested.** It has been run against the real API
+  and works — the charger question above produced correct SQL and a correct
+  number — but only for a handful of questions, and the one real run that was
+  examined closely turned up a genuine bug. The pipeline around the model calls
+  was verified end-to-end with a stubbed client, covering the happy path, the
+  repair loop, refusal, an unsafe query, and an empty result. The prompts remain
+  the least-proven part, and the narrator fix described above has not itself been
+  run. Prompt quality is exactly what needs real runs to judge.
 - **No evaluation set.** There is no way to tell whether a prompt change makes
   the assistant better or worse. For a real system this matters more than any
   individual feature, and it is the piece I would build next.
 - **Semantic errors pass silently.** The repair loop catches SQL that does not
   *run*. SQL that runs and answers the wrong question — averaging over line items
-  instead of orders, say — produces a confident, wrong answer. The safeguards
-  against this are the prompt, the `_cents` naming convention, and printing the
-  SQL so a reader can check it. That is weaker than I would like.
+  instead of orders, say — produces a confident, wrong answer. The safeguards are
+  the prompt, the `_cents` naming convention, and printing the SQL so a reader can
+  check it. That is weaker than I would like, and the charger failure above showed
+  the reader-checks-the-SQL safeguard does not cover errors introduced *after* the
+  query. The narrator is now constrained; nothing yet validates the query itself.
+- **Inner joins hide zeroes, and the planner is not told to care.** "How many
+  chargers were ordered" returns only chargers that were ordered; one with zero
+  orders vanishes rather than showing a 0. The narrator no longer misreports this,
+  but arguably the better answer lists the zero. Whether to prefer a `LEFT JOIN`
+  from the dimension table is a real design question — some questions genuinely
+  want only what was ordered — so it deserves a decision rather than a default.
 - **The `_cents` convention is a soft contract.** If the model names a money
   column something else, it renders as a bare integer — off by a factor of 100
   and not obviously wrong. A stricter version would check the plan's column names
@@ -183,8 +202,9 @@ modified apart from adding `strict: true` to `tsconfig.json` and three scripts
 
 In order:
 
-1. **Run it against the real API** and iterate on the two prompts. Nothing below
-   is worth doing before this.
+1. **Exercise it properly against the real API** and iterate on the two prompts.
+   A few questions have been run; the example questions in the brief have not, nor
+   has the narrator fix. Nothing below is worth doing before this.
 2. **Build an eval set** — twenty or so questions with known-correct answers,
    including the ones designed to trip the price trap and the ambiguous ones that
    should be refused. Score every prompt change against it.

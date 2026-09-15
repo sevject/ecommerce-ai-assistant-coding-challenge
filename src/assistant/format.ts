@@ -5,6 +5,18 @@
 import type { QueryResult } from './query.js';
 
 /**
+ * The currency amounts are displayed in.
+ *
+ * Note that this is a labelling decision, not a fact about the data: neither the
+ * schema nor the seed files record a currency anywhere, so the `_cents` columns
+ * are bare integers that carry no unit. Everything is assumed to be in one
+ * currency, and this is it. If the data ever became multi-currency, a symbol
+ * constant would be the wrong shape entirely — the currency would have to travel
+ * with the amount.
+ */
+export const CURRENCY_SYMBOL = '$';
+
+/**
  * Format integer cents as a currency string.
  *
  * The division by 100 happens exactly here, at the display boundary, and nowhere
@@ -16,7 +28,7 @@ export function formatCents(cents: number): string {
   const whole = Math.floor(absolute / 100);
   const fraction = String(absolute % 100).padStart(2, '0');
   const grouped = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `${negative ? '-' : ''}$${grouped}.${fraction}`;
+  return `${negative ? '-' : ''}${CURRENCY_SYMBOL}${grouped}.${fraction}`;
 }
 
 /**
