@@ -9,7 +9,10 @@
   },
   "scripts": {
     "db:create": "tsx scripts/create-database.ts",
-    "db:reset": "tsx scripts/create-database.ts --reset"
+    "db:reset": "tsx scripts/create-database.ts --reset",
+    "ask": "tsx src/cli.ts",
+    "test": "tsx --test src/assistant/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "coding-challenge",
@@ -20,7 +23,9 @@
   ],
   "license": "UNLICENSED",
   "dependencies": {
-    "better-sqlite3": "^13.0.1"
+    "@anthropic-ai/sdk": "^0.125.0",
+    "better-sqlite3": "^13.0.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
