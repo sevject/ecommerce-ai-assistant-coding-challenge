@@ -106,6 +106,73 @@ convention, which is also what the formatter keys on to render currency — so a
 model that reaches for `current_price_cents` on a historical question produces a
 visibly wrong column name as well as a wrong number.
 
+## An observed failure: the narration over-claiming
+
+Worth recording in full, because it is the most interesting thing that went wrong
+and the safeguards I had built did not catch it.
+
+Asked *"how many chargers were ordered?"*, the assistant answered:
+
+> 6 charger units were ordered in total. These all came from a single product, the
+> Phone Charger 65W — it's the only product whose name contains "charger."
+
+The first sentence is correct. The second is false: `Wireless Charger Pad` is also
+in the catalogue. It has never been ordered.
+
+The query was right. It anchors on `order_items` and inner-joins to `products`:
+
+```sql
+FROM order_items oi
+JOIN products p ON p.id = oi.product_id
+WHERE lower(p.name) LIKE '%charger%'
+```
+
+That is the correct shape for "how many were ordered" — but it makes a product
+with zero line items structurally invisible. The result set means *chargers that
+were ordered*, not *chargers*, so absence from it carries no information about
+whether something exists.
+
+The narrator receives only the question, the planner's interpretation, the SQL
+text, and the rows. It has no access to `products`, no schema, and no way to know
+the join was inner. It saw one product row and concluded "one row = one matching
+product in the catalogue" — a reasonable inference from a false premise.
+
+My guardrail did not apply. The rule read *"never introduce a number that is not
+in them"*, which is **number-scoped**; the false sentence contains no number. It
+is a claim about set membership, and it walked straight through a constraint
+written to police arithmetic. Two things made it likelier: the planner's own
+interpretation described a "per-product breakdown", which implies an exhaustive
+decomposition, and the instruction to write "two or three sentences" created
+pressure to elaborate past the one sentence the data supported.
+
+The fix, in `narrator.ts`, is four changes to the prompt:
+
+- State the epistemic status of the rows up front — the output of one filtered
+  query, with exclusions the narrator cannot see, and specifically that queries
+  about orders inner-join from `order_items` so anything never ordered is absent
+  while being perfectly real.
+- Broaden the rule from numbers to any unsupported number, name, or fact, and ban
+  claims of completeness, exclusivity, or non-existence outright. The line is
+  drawn between quantifying over *the rows* ("all six units were X", fine) and
+  quantifying over *the database* ("the only product", not fine).
+- Cut the sentence quota to one or two, with an explicit instruction to stop
+  rather than add context.
+- Include this exact case as a worked wrong/right example. A concrete instance
+  constrains a model far better than an abstract rule.
+
+The same latent bug was in the empty-result rule, which said to report that the
+query "found nothing matching" — one paraphrase away from "there are no
+chargers". It now says nothing *matched*, and explicitly not to claim the thing
+does not exist.
+
+**What this class of failure teaches.** I had listed "semantic errors pass
+silently" as a known gap, but I had framed it as *wrong SQL producing a confident
+wrong answer*, and my mitigation was printing the SQL so a reader could check it.
+This failure is the inverse and sneakier: right SQL, right numbers, prose that
+overstepped them. Printing the query is no defence, because there is nothing
+wrong with the query. Any stage that restates results in natural language needs
+its own constraints, independent of whether the stage feeding it was correct.
+
 ## Layout
 
 ```

@@ -1,5 +1,7 @@
 # E-Commerce AI Analytics Assistant: Coding Challenge
 
+Source: https://github.com/qualibet/ecommerce-ai-assistant-coding-challenge
+
 A starting point for a two-hour take-home. It sets up a small e-commerce data
 model and a SQLite database seeded with sample data. The challenge itself,
 building an assistant that answers questions about this data, is described in
